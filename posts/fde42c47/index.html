@@ -1,0 +1,454 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>IDA无头模式初探 | Q7h2q9のblog</title><meta name="author" content="Q7h2q9"><meta name="copyright" content="Q7h2q9"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#0d0d0d"><meta name="description" content="IDA无头模式初探IDA9.0之前，无CLI使用主要依靠命令行，它可以批量反编译文件并导出(结合INP脚本) 1ida64.exe [选项] 二进制文件  关于IDA的命令行选项，参照Command line switches | Hex-Rays Docs 这里只列出批量反编译需要的参数    参数 全称 作用    ​-A​ Autonomous 无头模式核心参数，不启动 GUI，自动应答所有">
+<meta property="og:type" content="article">
+<meta property="og:title" content="IDA无头模式初探">
+<meta property="og:url" content="https://q7h2q9.github.io/posts/fde42c47/index.html">
+<meta property="og:site_name" content="Q7h2q9のblog">
+<meta property="og:description" content="IDA无头模式初探IDA9.0之前，无CLI使用主要依靠命令行，它可以批量反编译文件并导出(结合INP脚本) 1ida64.exe [选项] 二进制文件  关于IDA的命令行选项，参照Command line switches | Hex-Rays Docs 这里只列出批量反编译需要的参数    参数 全称 作用    ​-A​ Autonomous 无头模式核心参数，不启动 GUI，自动应答所有">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://q7h2q9.github.io/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png">
+<meta property="article:published_time" content="2026-01-31T06:51:56.864Z">
+<meta property="article:modified_time" content="2026-01-31T06:59:22.383Z">
+<meta property="article:author" content="Q7h2q9">
+<meta property="article:tag" content="tips">
+<meta property="article:tag" content="基础知识">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://q7h2q9.github.io/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "IDA无头模式初探",
+  "url": "https://q7h2q9.github.io/posts/fde42c47/",
+  "image": "https://q7h2q9.github.io/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png",
+  "datePublished": "2026-01-31T06:51:56.864Z",
+  "dateModified": "2026-01-31T06:59:22.383Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Q7h2q9",
+      "url": "https://q7h2q9.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://q7h2q9.github.io/posts/fde42c47/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"><link rel="preconnect" href="//busuanzi.ibruce.info"><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":300,"languages":{"author":"作者: Q7h2q9","link":"链接: ","source":"来源: Q7h2q9のblog","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'IDA无头模式初探',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/custom.css"><svg aria-hidden="true" style="position:absolute; overflow:hidden; width:0; height:0"><symbol id="icon-sun" viewbox="0 0 1024 1024"><path d="M960 512l-128 128v192h-192l-128 128-128-128H192v-192l-128-128 128-128V192h192l128-128 128 128h192v192z" fill="#FFD878" p-id="8420"/><path d="M736 512a224 224 0 1 0-448 0 224 224 0 1 0 448 0z" fill="#FFE4A9" p-id="8421"/><path d="M512 109.248L626.752 224H800v173.248L914.752 512 800 626.752V800h-173.248L512 914.752 397.248 800H224v-173.248L109.248 512 224 397.248V224h173.248L512 109.248M512 64l-128 128H192v192l-128 128 128 128v192h192l128 128 128-128h192v-192l128-128-128-128V192h-192l-128-128z" fill="#4D5152" p-id="8422"/><path d="M512 320c105.888 0 192 86.112 192 192s-86.112 192-192 192-192-86.112-192-192 86.112-192 192-192m0-32a224 224 0 1 0 0 448 224 224 0 0 0 0-448z" fill="#4D5152" p-id="8423"/></symbol><symbol id="icon-moon" viewbox="0 0 1024 1024"><path d="M611.370667 167.082667a445.013333 445.013333 0 0 1-38.4 161.834666 477.824 477.824 0 0 1-244.736 244.394667 445.141333 445.141333 0 0 1-161.109334 38.058667 85.077333 85.077333 0 0 0-65.066666 135.722666A462.08 462.08 0 1 0 747.093333 102.058667a85.077333 85.077333 0 0 0-135.722666 65.024z" fill="#FFB531" p-id="11345"/><path d="M329.728 274.133333l35.157333-35.157333a21.333333 21.333333 0 1 0-30.165333-30.165333l-35.157333 35.157333-35.114667-35.157333a21.333333 21.333333 0 0 0-30.165333 30.165333l35.114666 35.157333-35.114666 35.157334a21.333333 21.333333 0 1 0 30.165333 30.165333l35.114667-35.157333 35.157333 35.157333a21.333333 21.333333 0 1 0 30.165333-30.165333z" fill="#030835" p-id="11346"/></symbol></svg><!-- hexo injector head_end start --><link rel="stylesheet" href="https://cdn.cbd.int/hexo-butterfly-clock-anzhiyu/lib/clock.min.css"><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.1"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/img/background.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">6</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">4</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg fixed" id="page-header" style="background-image: url(/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png);"><nav id="nav"><!-- 左侧博客信息区域--><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Q7h2q9のblog</span></a><a class="nav-page-title" href="/"><span class="site-name">IDA无头模式初探</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><!-- 新增的导航菜单容器（居中布局关键）--><div id="nav-menus-container"><!-- 菜单主体部分--><div id="menus"><!-- 菜单项--><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><!-- 右侧功能区域（新增容器）--><div id="nav-right-container"><!-- 搜索按钮（移动到右侧）--><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><!-- 移动端汉堡菜单按钮--><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">IDA无头模式初探</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-01-31T06:51:56.864Z" title="发表于 2026-01-31 14:51:56">2026-01-31</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-01-31T06:59:22.383Z" title="更新于 2026-01-31 14:59:22">2026-01-31</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/IDA%E6%8A%80%E5%B7%A7/">IDA技巧</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>7分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id data-flag-title><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="IDA无头模式初探"><a href="#IDA无头模式初探" class="headerlink" title="IDA无头模式初探"></a>IDA无头模式初探</h1><p>IDA9.0之前，无CLI使用主要依靠命令行，它可以批量反编译文件并导出(结合<a target="_blank" rel="external nofollow noopener noreferrer" href="https://github.com/P4nda0s/IDA-NO-MCP">INP</a>脚本)</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ida64.exe [选项] 二进制文件</span><br></pre></td></tr></table></figure>
+
+<p>关于IDA的命令行选项，参照<a target="_blank" rel="external nofollow noopener noreferrer" href="https://docs.hex-rays.com/user-guide/configuration/command-line-switches">Command line switches | Hex-Rays Docs</a></p>
+<p>这里只列出批量反编译需要的参数</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>全称</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>​<code>-A</code>​</td>
+<td>Autonomous</td>
+<td><strong>无头模式核心参数</strong>，不启动 GUI，自动应答所有对话框</td>
+</tr>
+<tr>
+<td>​<code>-S&lt;script&gt;</code>​</td>
+<td>Script</td>
+<td>加载完成后执行指定 IDAPython 脚本(需调用 <code>qexit()</code>​)</td>
+</tr>
+<tr>
+<td>​<code>-c</code>​</td>
+<td>Create</td>
+<td>强制创建新数据库，不复用已有 .idb&#x2F;.i64</td>
+</tr>
+<tr>
+<td>​<code>-L&lt;logfile&gt;</code>​</td>
+<td>Log</td>
+<td>输出日志到指定文件</td>
+</tr>
+<tr>
+<td>​<code>-T&lt;prefix&gt;</code>​</td>
+<td>Temp</td>
+<td>指定临时文件前缀</td>
+</tr>
+<tr>
+<td>​<code>-o&lt;idbfile&gt;</code>​</td>
+<td>Output</td>
+<td>指定输出数据库路径</td>
+</tr>
+</tbody></table>
+<p>‍</p>
+<p><strong>无头运行 (Headless Mode)</strong>  指在不启动图形界面 (GUI) 的情况下运行 IDA，通过脚本自动完成分析、反编译、数据提取等任务。</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>传统 GUI 模式的痛点</th>
+<th>无头模式的优势</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>批量样本分析</td>
+<td>需要手动逐个打开</td>
+<td>脚本自动遍历处理</td>
+</tr>
+<tr>
+<td>CI&#x2F;CD 集成</td>
+<td>无法在服务器运行</td>
+<td>命令行直接调用</td>
+</tr>
+<tr>
+<td>数据集构建</td>
+<td>效率极低</td>
+<td>并行处理，可扩展</td>
+</tr>
+<tr>
+<td>自动化流水线</td>
+<td>需要人工交互</td>
+<td>全程无人值守</td>
+</tr>
+</tbody></table>
+<p>9.0及之后，引入了<strong>IDALib</strong>，它将IDA的分析能力打包成Python库，可以在无CLI下调用 ida_* Python API</p>
+<p>对于两种无头运行方式，适用于不同版本和场景：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    方案一：传统批处理模式                         │</span><br><span class="line">│                  (所有 IDA 版本均支持)                           │</span><br><span class="line">├─────────────────────────────────────────────────────────────────┤</span><br><span class="line">│  命令行:  ida64.exe -A -S&quot;script.py&quot; binary_file               │</span><br><span class="line">│                                                                 │</span><br><span class="line">│  原理:    启动 IDA 进程 → 加载二进制 → 执行脚本 → 退出           │</span><br><span class="line">│  环境:    IDA 内置 Python (IDAPython)，与系统 Python 隔离        │</span><br><span class="line">└─────────────────────────────────────────────────────────────────┘</span><br><span class="line"></span><br><span class="line">┌─────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    方案二：IDALib 库模式                         │</span><br><span class="line">│                    (IDA 9.0+ 专属)                              │</span><br><span class="line">├─────────────────────────────────────────────────────────────────┤</span><br><span class="line">│  代码:    import idalib; idalib.open_database(&quot;binary&quot;)        │</span><br><span class="line">│                                                                 │</span><br><span class="line">│  原理:    IDA 作为 Python 包，直接在脚本中调用 API               │</span><br><span class="line">│  环境:    系统 Python，需安装 idalib 包                         │</span><br><span class="line">└─────────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>传统批处理模式 (-A -S)</th>
+<th>IDALib 库模式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>IDA 版本要求</td>
+<td>所有版本</td>
+<td>IDA 9.0+</td>
+</tr>
+<tr>
+<td>Python 环境</td>
+<td>IDA 内置 (隔离)</td>
+<td>系统 Python</td>
+</tr>
+<tr>
+<td>调用方式</td>
+<td>subprocess 进程调用</td>
+<td>直接 import</td>
+</tr>
+<tr>
+<td>资源管理</td>
+<td>进程退出自动释放</td>
+<td>需手动关闭数据库</td>
+</tr>
+<tr>
+<td>多任务处理</td>
+<td>多进程天然隔离</td>
+<td>需注意资源泄露</td>
+</tr>
+<tr>
+<td>学习成本</td>
+<td>低</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>通用、绿色版 IDA</td>
+<td>深度集成、服务化</td>
+</tr>
+</tbody></table>
+<h2 id="命令行模式"><a href="#命令行模式" class="headerlink" title="命令行模式"></a>命令行模式</h2><p>针对命令行的使用，主要是结合Python+INP实现批量反编译并导出</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line">┌──────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                        IDA 批处理执行流程                             │</span><br><span class="line">└──────────────────────────────────────────────────────────────────────┘</span><br><span class="line"></span><br><span class="line">外部调用者 (Python/Shell)</span><br><span class="line">    │</span><br><span class="line">    │  subprocess.run([&quot;ida64.exe&quot;, &quot;-A&quot;, &quot;-Sscript.py&quot;, &quot;binary&quot;])</span><br><span class="line">    ▼</span><br><span class="line">┌──────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                         IDA 进程启动                                 │</span><br><span class="line">│  ┌────────────────────────────────────────────────────────────────┐  │</span><br><span class="line">│  │ 1. 初始化 IDA 核心引擎                                          │  │</span><br><span class="line">│  │ 2. 加载处理器模块 (pc.dll / arm.dll 等)                         │  │</span><br><span class="line">│  │ 3. 加载类型库 (gnulnx_x64 等)                                   │  │</span><br><span class="line">│  └────────────────────────────────────────────────────────────────┘  │</span><br><span class="line">│                              ▼                                       │</span><br><span class="line">│  ┌────────────────────────────────────────────────────────────────┐  │</span><br><span class="line">│  │ 4. 加载二进制文件                                               │  │</span><br><span class="line">│  │    - 解析文件格式 (ELF/PE/Mach-O)                               │  │</span><br><span class="line">│  │    - 创建内存段 (segment)                                       │  │</span><br><span class="line">│  │    - 识别入口点                                                 │  │</span><br><span class="line">│  └────────────────────────────────────────────────────────────────┘  │</span><br><span class="line">│                              ▼                                       │</span><br><span class="line">│  ┌────────────────────────────────────────────────────────────────┐  │</span><br><span class="line">│  │ 5. 自动分析 (Auto Analysis) ⚠️ 关键阶段                         │  │</span><br><span class="line">│  │    - 递归反汇编                                                 │  │</span><br><span class="line">│  │    - 识别函数边界                                               │  │</span><br><span class="line">│  │    - 构建交叉引用                                               │  │</span><br><span class="line">│  │    - 类型传播                                                   │  │</span><br><span class="line">│  │    [此阶段可能需要数秒到数分钟]                                  │  │</span><br><span class="line">│  └────────────────────────────────────────────────────────────────┘  │</span><br><span class="line">│                              ▼                                       │</span><br><span class="line">│  ┌────────────────────────────────────────────────────────────────┐  │</span><br><span class="line">│  │ 6. 执行 -S 指定的脚本                                           │  │</span><br><span class="line">│  │    ⚠️ 必须先调用 ida_auto.auto_wait() 等待分析完成               │  │</span><br><span class="line">│  │    然后才能正确获取函数列表、调用反编译器                         │  │</span><br><span class="line">│  └────────────────────────────────────────────────────────────────┘  │</span><br><span class="line">│                              ▼                                       │</span><br><span class="line">│  ┌────────────────────────────────────────────────────────────────┐  │</span><br><span class="line">│  │ 7. 脚本调用 ida_pro.qexit(0) 退出 IDA                           │  │</span><br><span class="line">│  └────────────────────────────────────────────────────────────────┘  │</span><br><span class="line">└──────────────────────────────────────────────────────────────────────┘</span><br><span class="line">    │</span><br><span class="line">    ▼</span><br><span class="line">外部调用者收到进程返回码</span><br></pre></td></tr></table></figure>
+
+<h3 id="模版脚本"><a href="#模版脚本" class="headerlink" title="模版脚本"></a>模版脚本</h3><p>示例IDAPython 批处理脚本模板(无CLI)</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python3</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">IDA 批处理脚本模板</span></span><br><span class="line"><span class="string">用法: ida64.exe -A -S&quot;this_script.py&quot; binary_file</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"><span class="keyword">import</span> ida_auto</span><br><span class="line"><span class="keyword">import</span> ida_hexrays</span><br><span class="line"><span class="keyword">import</span> ida_funcs</span><br><span class="line"><span class="keyword">import</span> ida_nalt</span><br><span class="line"><span class="keyword">import</span> idautils</span><br><span class="line"><span class="keyword">import</span> idc</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;主函数&quot;&quot;&quot;</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;=&quot;</span> * <span class="number">60</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;IDA Batch Script&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;=&quot;</span> * <span class="number">60</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># ⚠️ 关键：等待自动分析完成</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;[*] Waiting for auto-analysis...&quot;</span>)</span><br><span class="line">    ida_auto.auto_wait()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;[+] Auto-analysis completed&quot;</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 初始化反编译器</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> ida_hexrays.init_hexrays_plugin():</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;[!] Hex-Rays decompiler not available&quot;</span>)</span><br><span class="line">        has_hexrays = <span class="literal">False</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;[+] Hex-Rays initialized&quot;</span>)</span><br><span class="line">        has_hexrays = <span class="literal">True</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 获取输出目录</span></span><br><span class="line">    input_path = ida_nalt.get_input_file_path()</span><br><span class="line">    output_dir = os.path.join(os.path.dirname(input_path), <span class="string">&quot;output&quot;</span>)</span><br><span class="line">    os.makedirs(output_dir, exist_ok=<span class="literal">True</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 遍历所有函数</span></span><br><span class="line">    <span class="keyword">for</span> func_ea <span class="keyword">in</span> idautils.Functions():</span><br><span class="line">        func_name = idc.get_func_name(func_ea)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;[*] Processing: <span class="subst">&#123;func_name&#125;</span> @ <span class="subst">&#123;<span class="built_in">hex</span>(func_ea)&#125;</span>&quot;</span>)</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> has_hexrays:</span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                cfunc = ida_hexrays.decompile(func_ea)</span><br><span class="line">                <span class="keyword">if</span> cfunc:</span><br><span class="line">                    <span class="comment"># 保存反编译结果</span></span><br><span class="line">                    output_path = os.path.join(output_dir, <span class="string">f&quot;<span class="subst">&#123;<span class="built_in">hex</span>(func_ea)&#125;</span>.c&quot;</span>)</span><br><span class="line">                    <span class="keyword">with</span> <span class="built_in">open</span>(output_path, <span class="string">&#x27;w&#x27;</span>, encoding=<span class="string">&#x27;utf-8&#x27;</span>) <span class="keyword">as</span> f:</span><br><span class="line">                        f.write(<span class="built_in">str</span>(cfunc))</span><br><span class="line">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">f&quot;    [!] Decompile failed: <span class="subst">&#123;e&#125;</span>&quot;</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;[+] Done!&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># ⚠️ 关键：退出 IDA</span></span><br><span class="line">    <span class="keyword">import</span> ida_pro</span><br><span class="line">    ida_pro.qexit(<span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<p>针对命令行版本，</p>
+<p>IDA 提供了两种可执行文件：</p>
+<table>
+<thead>
+<tr>
+<th>可执行文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>​<code>ida.exe</code>​ &#x2F; <code>ida64.exe</code>​</td>
+<td>完整版，包含 GUI 库（<code>-A</code>​ 时不显示窗口）</td>
+</tr>
+<tr>
+<td>​<code>idat.exe</code>​ &#x2F; <code>idat64.exe</code>​</td>
+<td>纯命令行版 (Text mode)，无 GUI 依赖，更轻量</td>
+</tr>
+</tbody></table>
+<p><strong>推荐</strong>：批处理场景优先使用 <code>idat64</code>​，资源占用更少。</p>
+<h3 id="遇到的坑"><a href="#遇到的坑" class="headerlink" title="遇到的坑"></a>遇到的坑</h3><ul>
+<li>使用命令行形式的IDA分析二进制文件时，要考虑到IDA分析需要时间，所以并不能在使用ida.exe打开二进制后直接跑IDAPython脚本，需要等待一段时间，IDA提供了api：<code>ida_auto.auto_wait()</code>​</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ❌ 错误写法：脚本执行时分析可能还没完成</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="keyword">for</span> func_ea <span class="keyword">in</span> idautils.Functions():  <span class="comment"># 可能返回空或不完整</span></span><br><span class="line">        decompile(func_ea)  <span class="comment"># 失败率极高</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ✅ 正确写法：等待自动分析完成</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="keyword">import</span> ida_auto</span><br><span class="line">    ida_auto.auto_wait()  <span class="comment"># 阻塞直到分析完成</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> func_ea <span class="keyword">in</span> idautils.Functions():  <span class="comment"># 现在能拿到完整的函数列表</span></span><br><span class="line">        decompile(func_ea)  <span class="comment"># 正常工作</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>批处理模式下，脚本执行完<strong>必须主动退出 IDA</strong>，否则进程会挂起：</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 脚本末尾必须有：</span></span><br><span class="line"><span class="keyword">import</span> ida_pro</span><br><span class="line">ida_pro.qexit(<span class="number">0</span>)  <span class="comment"># 参数 0 表示正常退出</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用的是绿色版IDA，外层Python与-S参数跟的脚本代码所运行的Python环境是隔离开的。</li>
+</ul>
+<p>‍</p>
+<hr>
+<h2 id="IDALib-库模式-IDA-9-0"><a href="#IDALib-库模式-IDA-9-0" class="headerlink" title="IDALib 库模式 (IDA 9.0+)"></a>IDALib 库模式 (IDA 9.0+)</h2><p>IDA 9.0 引入的 <strong>IDALib (IDA as a Library)</strong>  把 IDA 的分析能力封装成 Python 包，可以直接在系统 Python 中 <code>import</code>​ 使用，无需启动独立进程。</p>
+<p>好处是可以在纯命令行环境下调用IDA的各种api，比如分析二进制文件、反编译、patch、导出数据库等，玩法更加多样。</p>
+<h3 id="环境配置"><a href="#环境配置" class="headerlink" title="环境配置"></a>环境配置</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 进入 IDA 安装目录</span></span><br><span class="line"><span class="built_in">cd</span> <span class="string">&quot;C:\Program Files\IDA Pro 9.0&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 安装 IDALib 对应的 Python 包（包名是 idapro）</span></span><br><span class="line">python -m pip install ./idalib/python</span><br><span class="line"></span><br><span class="line"><span class="comment"># 激活 IDALib（绑定当前 IDA 安装）</span></span><br><span class="line">python py-activate-idalib.py</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p><img src="/post_imgs/image-20260131144524-8w4h6yv.png" alt="image"></p>
+<p><img src="/post_imgs/image-20260131144551-leq7mrf.png" alt="image"></p>
+<h3 id="模版脚本-1"><a href="#模版脚本-1" class="headerlink" title="模版脚本"></a>模版脚本</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python3</span></span><br><span class="line"><span class="comment"># ⚠️ 必须是第一个 import，用于初始化 IDA 运行时</span></span><br><span class="line"><span class="keyword">import</span> idapro</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> idautils</span><br><span class="line"><span class="keyword">import</span> idc</span><br><span class="line"><span class="keyword">import</span> ida_hexrays</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="comment"># 打开二进制或已有 IDB，True 表示执行自动分析</span></span><br><span class="line">    idapro.open_database(<span class="string">&quot;target_binary&quot;</span>, <span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 初始化 Hex-Rays（无头模式必须显式调用）</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> ida_hexrays.init_hexrays_plugin():</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;[-] Hex-Rays decompiler is not available&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> func_ea <span class="keyword">in</span> idautils.Functions():</span><br><span class="line">        func_name = idc.get_func_name(func_ea)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;\nFunction: <span class="subst">&#123;func_name&#125;</span> @ <span class="subst">&#123;<span class="built_in">hex</span>(func_ea)&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            cfunc = ida_hexrays.decompile(func_ea)</span><br><span class="line">            <span class="keyword">if</span> cfunc:</span><br><span class="line">                <span class="built_in">print</span>(<span class="built_in">str</span>(cfunc))</span><br><span class="line">        <span class="keyword">except</span> ida_hexrays.DecompilationFailure:</span><br><span class="line">            <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># 关闭并保存数据库，释放资源</span></span><br><span class="line">    idapro.close_database()</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="坑"><a href="#坑" class="headerlink" title="坑"></a>坑</h3><ul>
+<li>在 IDALib 模式下，<code>idapro</code>​（或 <code>ida</code>​）模块负责初始化 IDA 的核心运行时环境，因此<strong>必须作为脚本的第一个导入项</strong>。在它完成初始化之前，其它 <code>ida_*</code>​ 模块（如 <code>idautils</code>​、<code>ida_hexrays</code>​）都无法正常工作。</li>
+</ul>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ul>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://hex-rays.com/ida-pro/doc/batch/">IDA 官方文档 - Batch Mode</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://hex-rays.com/products/ida/support/idapython_docs/">IDAPython 官方文档</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://hex-rays.com/blog/idalib/">IDALib 介绍 (IDA 9.0)</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://mp.weixin.qq.com/s/rDRBRExE5j3n8GqnpkPcyQ">https://mp.weixin.qq.com/s/rDRBRExE5j3n8GqnpkPcyQ</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io">Q7h2q9</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io/posts/fde42c47/">https://q7h2q9.github.io/posts/fde42c47/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="external nofollow noopener noreferrer">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://q7h2q9.github.io" target="_blank">Q7h2q9のblog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">基础知识</a><a class="post-meta__tags" href="/tags/tips/">tips</a></div><div class="post-share"><div class="social-share" data-image="/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/posts/99a483bd/" title="dex(Dalvik 可执行文件) 结构学习"><img class="cover" src="/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg" onerror="onerror=null;src='/img/post-404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">dex(Dalvik 可执行文件) 结构学习</div></div><div class="info-2"><div class="info-item-1">前言近几个月接触了挺多安卓方面的东西，但本地笔记杂而乱，于是整理一下 背景1. Java写一个Helloworld.java​文件，javac​把它翻译成字节码：Helloworld.class​，JVM 启动。当用到 HelloWorld​ 这个类时，JVM 的 ClassLoader 就会去硬盘上找到那个 .class​ 文件，读进内存，然后执行 问题：对于app来说，通常有很多个类，如果都按照这个机制来查找的话，硬盘里会有 10000 个分散的 .class​ 文件，容易造成空间浪费和性能降低(I&#x2F;O) 2. Android 的 DEX为了解决上面的问题，出现了DEX (Dalvik Executable)  格式和 ART 虚拟机 采用 常量池去重 的思路，d8 将这10000个.class​融合成一个classes.dex​文件 Dex 是Android系统中Java字节码的优化格式，相比传统的class文件，Dex具有更高的执行效率和更小的文件体积。  数据类型   自定义类型 原类型 含义    s1 int8_t 有符号单字节   u1 uint8_t ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/posts/123123213/" title="MCP初探"><img class="cover" src="/img/%E5%8D%9A%E5%AE%A2%E7%BE%8E%E5%8C%96todo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-01</div><div class="info-item-2">MCP初探</div></div><div class="info-2"><div class="info-item-1"> 原理MCP(Model Context Protocol（模型上下文协议）)是由Anthropic开发的一个标准化协议，用于让AI模型和应用程序与外部系统进行安全、高效的通信。 MCP 采用”主机-客户端-服务端”的三层架构    组件 核心职责 典型示例    MCP 主机端（Host） 发起请求的”需求方”，即需要调用外部资源的 AI 应用或程序，负责整合模型输出与外部工具结果 Claude 桌面应用、AI 开发 IDE（如 VS Code 插件）、企业内部 AI 助手系统   MCP 客户端（Client） 协议的”传输中介”，与服务端建立一对一专属连接，负责将主机端的请求标准化，同时将服务端的响应解析后返回主机端 遵循 MCP 协议开发的轻量级客户端程序、嵌入 AI 应用的协议模块   MCP 服务端（Server） 提供具体功能的”资源方”，通过 MCP 协议暴露特定能力，接收标准化请求后执行操作并返回结果 实时数据查询服务器、文件解析服务、第三方工具 API 适配服务（如地图、支付工具）   mcp之前每个AI应用有自己的工具实现方式  OpenAI 方式  123...</div></div></div></a><a class="pagination-related" href="/posts/99a483bd/" title="dex(Dalvik 可执行文件) 结构学习"><img class="cover" src="/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-27</div><div class="info-item-2">dex(Dalvik 可执行文件) 结构学习</div></div><div class="info-2"><div class="info-item-1">前言近几个月接触了挺多安卓方面的东西，但本地笔记杂而乱，于是整理一下 背景1. Java写一个Helloworld.java​文件，javac​把它翻译成字节码：Helloworld.class​，JVM 启动。当用到 HelloWorld​ 这个类时，JVM 的 ClassLoader 就会去硬盘上找到那个 .class​ 文件，读进内存，然后执行 问题：对于app来说，通常有很多个类，如果都按照这个机制来查找的话，硬盘里会有 10000 个分散的 .class​ 文件，容易造成空间浪费和性能降低(I&#x2F;O) 2. Android 的 DEX为了解决上面的问题，出现了DEX (Dalvik Executable)  格式和 ART 虚拟机 采用 常量池去重 的思路，d8 将这10000个.class​融合成一个classes.dex​文件 Dex 是Android系统中Java字节码的优化格式，相比传统的class文件，Dex具有更高的执行效率和更小的文件体积。  数据类型   自定义类型 原类型 含义    s1 int8_t 有符号单字节   u1 uint8_t ...</div></div></div></a></div></div><hr class="custom-hr"><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="giscus-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="author-info-name">Q7h2q9</div><div class="author-info-description">什么树开什么花，</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">6</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">4</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="external nofollow noopener noreferrer" href="https://github.com/Q7h2q9"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Q7h2q9" target="_blank" title="Github" rel="external nofollow noopener noreferrer"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="https://space.bilibili.com/434684032" target="_blank" title="Bilibili" rel="external nofollow noopener noreferrer"><i class="fab fa-bilibili" style="color: #fb7299;"></i></a><a class="social-icon" href="mailto:2925869228@qq.com" target="_blank" title="Email" rel="external nofollow noopener noreferrer"><i class="fas fa-envelope" style="color: #12B7F5;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">起势，收势</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2"><span class="toc-number">1.</span> <span class="toc-text">IDA无头模式初探</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%91%BD%E4%BB%A4%E8%A1%8C%E6%A8%A1%E5%BC%8F"><span class="toc-number">1.1.</span> <span class="toc-text">命令行模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E7%89%88%E8%84%9A%E6%9C%AC"><span class="toc-number">1.1.1.</span> <span class="toc-text">模版脚本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%87%E5%88%B0%E7%9A%84%E5%9D%91"><span class="toc-number">1.1.2.</span> <span class="toc-text">遇到的坑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#IDALib-%E5%BA%93%E6%A8%A1%E5%BC%8F-IDA-9-0"><span class="toc-number">1.2.</span> <span class="toc-text">IDALib 库模式 (IDA 9.0+)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE"><span class="toc-number">1.2.1.</span> <span class="toc-text">环境配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E7%89%88%E8%84%9A%E6%9C%AC-1"><span class="toc-number">1.2.2.</span> <span class="toc-text">模版脚本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91"><span class="toc-number">1.2.3.</span> <span class="toc-text">坑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-number">1.3.</span> <span class="toc-text">参考资料</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/posts/fde42c47/" title="IDA无头模式初探"><img src="/img/IDA%E6%97%A0%E5%A4%B4%E6%A8%A1%E5%BC%8F%E5%88%9D%E6%8E%A2.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="IDA无头模式初探"></a><div class="content"><a class="title" href="/posts/fde42c47/" title="IDA无头模式初探">IDA无头模式初探</a><time datetime="2026-01-31T06:51:56.864Z" title="发表于 2026-01-31 14:51:56">2026-01-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/99a483bd/" title="dex(Dalvik 可执行文件) 结构学习"><img src="/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="dex(Dalvik 可执行文件) 结构学习"></a><div class="content"><a class="title" href="/posts/99a483bd/" title="dex(Dalvik 可执行文件) 结构学习">dex(Dalvik 可执行文件) 结构学习</a><time datetime="2026-01-27T10:53:15.866Z" title="发表于 2026-01-27 18:53:15">2026-01-27</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/123123213/" title="MCP初探"><img src="/img/%E5%8D%9A%E5%AE%A2%E7%BE%8E%E5%8C%96todo.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="MCP初探"></a><div class="content"><a class="title" href="/posts/123123213/" title="MCP初探">MCP初探</a><time datetime="2026-01-01T08:06:42.423Z" title="发表于 2026-01-01 16:06:42">2026-01-01</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/0/" title="2025年终总结"><img src="/img/2025%E5%B9%B4%E7%BB%88%E6%80%BB%E7%BB%93.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="2025年终总结"></a><div class="content"><a class="title" href="/posts/0/" title="2025年终总结">2025年终总结</a><time datetime="2025-12-31T18:15:38.053Z" title="发表于 2026-01-01 02:15:38">2026-01-01</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/1/" title="博客美化todo"><img src="/img/%E5%8D%9A%E5%AE%A2%E7%BE%8E%E5%8C%96todo.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="博客美化todo"></a><div class="content"><a class="title" href="/posts/1/" title="博客美化todo">博客美化todo</a><time datetime="2025-12-22T13:56:35.873Z" title="发表于 2025-12-22 21:56:35">2025-12-22</time></div></div></div></div></div></div></main><footer id="footer" style="background-color: rgba(45, 10, 61, 0.2);"><div class="footer-other"><div class="footer-copyright"></div><div class="footer_custom_text"><div>2025 Q7h2q9 - 所有权利保留</div>
+<div>> stay subside <</div>
+<div>访问量:<span id="busuanzi_value_site_pv"></span> | 你是第<span id="busuanzi_value_site_uv"></span>位今日访客</div>
+</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><a class="icon-V" href="javascript:void(0);" onclick="switchNightMode()" title="日间和夜间模式切换"><svg width="25" height="25" viewbox="0 0 1024 1024"><use id="modeicon" xlink:href="#icon-moon"/></svg></a><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = {"data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN"}
+
+  const getGiscusTheme = theme => theme === 'dark' ? 'dark' : 'light'
+
+  const createScriptElement = config => {
+    const ele = document.createElement('script')
+    Object.entries(config).forEach(([key, value]) => {
+      ele.setAttribute(key, value)
+    })
+    return ele
+  }
+
+  const loadGiscus = (el = document, key) => {
+    const mappingConfig = isShuoshuo
+      ? { 'data-mapping': 'specific', 'data-term': key }
+      : { 'data-mapping': (option && option['data-mapping']) || 'pathname' }
+
+    const giscusConfig = {
+      src: 'https://giscus.app/client.js',
+      'data-repo': 'Q7h2q9/Q7h2q9.github.io',
+      'data-repo-id': 'R_kgDOQrfy5A',
+      'data-category-id': 'DIC_kwDOQrfy5M4C0O_x',
+      'data-theme': getGiscusTheme(document.documentElement.getAttribute('data-theme')),
+      'data-reactions-enabled': '1',
+      crossorigin: 'anonymous',
+      async: true,
+      ...option,
+      ...mappingConfig
+    }
+
+    const scriptElement = createScriptElement(giscusConfig)
+
+    el.querySelector('#giscus-wrap').appendChild(scriptElement)
+
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyGiscus = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+  }
+
+  const changeGiscusTheme = theme => {
+    const iframe = document.querySelector('#giscus-wrap iframe')
+    if (iframe) {
+      const message = {
+        giscus: {
+          setConfig: {
+            theme: getGiscusTheme(theme)
+          }
+        }
+      }
+      iframe.contentWindow.postMessage(message, 'https://giscus.app')
+    }
+  }
+
+  btf.addGlobalFn('themeChange', changeGiscusTheme, 'giscus')
+
+  if (isShuoshuo) {
+    'Giscus' === 'Giscus'
+      ? window.shuoshuoComment = { loadComment: loadGiscus }
+      : window.loadOtherComment = loadGiscus
+    return
+  }
+
+  if ('Giscus' === 'Giscus' || !false) {
+    if (false) btf.loadComment(document.getElementById('giscus-wrap'), loadGiscus)
+    else loadGiscus()
+  } else {
+    window.loadOtherComment = loadGiscus
+  }
+})()</script></div><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><script src="/js/sun_moon.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="输入关键词…" type="text"></div><hr><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.3"></script></div></div><!-- hexo injector body_end start --><script data-pjax>
+  function butterfly_clock_anzhiyu_injector_config(){
+    var parent_div_git = document.getElementsByClassName('sticky_layout')[0];
+    var item_html = '<div class="card-widget card-clock"><div class="card-glass"><div class="card-background"><div class="card-content"><div id="hexo_electric_clock"><img class="entered loading" id="card-clock-loading" src="https://cdn.cbd.int/hexo-butterfly-clock-anzhiyu/lib/loading.gif" style="height: 120px; width: 100%;" data-ll-status="loading"/></div></div></div></div></div>';
+    console.log('已挂载butterfly_clock_anzhiyu')
+    if(parent_div_git) {
+      parent_div_git.insertAdjacentHTML("afterbegin",item_html)
+    }
+  }
+  var elist = 'null'.split(',');
+  var cpage = location.pathname;
+  var epage = 'all';
+  var qweather_key = '9302ce3b92f94740ababc45e1161a2b1';
+  var qweather_api_host = 'nj6r6pm8pt.re.qweatherapi.com';
+  var ip_api_key = 'Kq1pRjB3WyDja7rhKcWV9f5QU8';
+  var gaud_map_key = '05dbedf09ef65c990041a679e13416cd';
+  var baidu_ak_key = 'undefined';
+  var flag = 0;
+  var clock_rectangle = '112.982279,28.19409';
+  var clock_default_rectangle_enable = 'false';
+
+  for (var i=0;i<elist.length;i++){
+    if (cpage.includes(elist[i])){
+      flag++;
+    }
+  }
+
+  if ((epage ==='all')&&(flag == 0)){
+    butterfly_clock_anzhiyu_injector_config();
+  }
+  else if (epage === cpage){
+    butterfly_clock_anzhiyu_injector_config();
+  }
+  </script><script data-pjax src="https://cdn.cbd.int/hexo-butterfly-clock-anzhiyu/lib/clock.min.js"></script><!-- hexo injector body_end end --></body></html>
