@@ -27,6 +27,11 @@
     height: 900px;
 }
 
+/* 文章页标题上移 */
+#page-header.post-bg #post-info {
+    bottom: 120px;
+}
+
 /* 页脚透明渐变 */
 #footer {
     background: rgba(255,255,255,.15);
