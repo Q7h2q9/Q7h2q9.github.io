@@ -111,3 +111,144 @@
     font-size: .88em;
 }
 
+/* =========================================================
+   Artalk 评论样式 - 极简透明风（参考 Twikoo 视觉）
+   ========================================================= */
+.atk-wrap {
+    --at-color-font: var(--font-color, #4c4948);
+    --at-color-meta: #999;
+    --at-color-bg: transparent;
+    --at-color-bg-transl: transparent;
+    --at-color-bg-grey: transparent;
+    --at-color-border: rgba(0,0,0,.08);
+    --at-color-main: #49b1f5;
+    --at-radius: 8px;
+    --at-radius-input: 5px;
+    --at-font-size: 16px;
+    font-size: 16px;
+}
+
+/* 卡片、评论列表项 - 透明背景 */
+.atk-wrap .atk-list > .atk-item,
+.atk-wrap .atk-list > .atk-item > .atk-main,
+.atk-wrap .atk-list > .atk-item > .atk-main > .atk-header,
+.atk-wrap .atk-item,
+.atk-wrap .atk-comment-wrap,
+.atk-wrap .atk-comment {
+    background: transparent;
+}
+
+/* 评论项之间细线分隔 */
+.atk-wrap .atk-list > .atk-item + .atk-item {
+    border-top: 1px solid rgba(0,0,0,.06);
+    padding-top: 16px;
+    margin-top: 16px;
+}
+
+/* 头像 - 小圆角 */
+.atk-wrap .atk-avatar img {
+    border-radius: 4px;
+}
+
+/* 输入框 - 半透明背景 */
+.atk-wrap .atk-textarea-wrap textarea,
+.atk-wrap textarea.atk-textarea {
+    background: rgba(0,0,0,.03) !important;
+    border: 1px solid rgba(0,0,0,.1) !important;
+    border-radius: 5px !important;
+    padding: 10px 12px !important;
+    font-size: 15px !important;
+    color: var(--font-color, #4c4948) !important;
+    resize: vertical;
+}
+.atk-wrap .atk-textarea-wrap textarea:focus {
+    background: rgba(73,177,245,.04) !important;
+    border-color: #49b1f5 !important;
+    outline: none;
+}
+
+/* 昵称邮箱输入框 */
+.atk-wrap input.atk-input {
+    background: rgba(0,0,0,.03);
+    border: 1px solid rgba(0,0,0,.1);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 14px;
+    color: var(--font-color, #4c4948);
+}
+.atk-wrap input.atk-input:focus {
+    background: rgba(73,177,245,.04);
+    border-color: #49b1f5;
+    outline: none;
+}
+
+/* 提交按钮 - 透明底细边框 */
+.atk-wrap .atk-send-btn,
+.atk-wrap button.atk-send-btn {
+    background: transparent !important;
+    color: #4a4a4a !important;
+    border: 1px solid rgba(0,0,0,.15) !important;
+    border-radius: 5px !important;
+    padding: 5px 14px !important;
+    font-size: 14px !important;
+    cursor: pointer;
+    transition: all .2s;
+}
+.atk-wrap .atk-send-btn:hover {
+    background: rgba(73,177,245,.08) !important;
+    border-color: #49b1f5 !important;
+    color: #49b1f5 !important;
+}
+
+/* 回复按钮 */
+.atk-wrap .atk-comment-btn {
+    color: #49b1f5;
+    background: transparent;
+}
+
+/* badge / 管理员标签 */
+.atk-wrap .atk-badge {
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 1px 6px;
+}
+
+/* 夜间模式 */
+[data-theme="dark"] .atk-wrap {
+    --at-color-font: rgba(255,255,255,.7);
+    --at-color-meta: #999;
+    --at-color-border: rgba(255,255,255,.08);
+    --at-color-main: #49b1f5;
+}
+
+[data-theme="dark"] .atk-wrap .atk-list > .atk-item + .atk-item {
+    border-top-color: rgba(255,255,255,.06);
+}
+
+[data-theme="dark"] .atk-wrap .atk-textarea-wrap textarea,
+[data-theme="dark"] .atk-wrap textarea.atk-textarea {
+    background: rgba(255,255,255,.04) !important;
+    border-color: rgba(255,255,255,.1) !important;
+    color: rgba(255,255,255,.7) !important;
+}
+[data-theme="dark"] .atk-wrap .atk-textarea-wrap textarea:focus {
+    background: rgba(73,177,245,.08) !important;
+    border-color: #49b1f5 !important;
+}
+
+[data-theme="dark"] .atk-wrap input.atk-input {
+    background: rgba(255,255,255,.04);
+    border-color: rgba(255,255,255,.1);
+    color: rgba(255,255,255,.7);
+}
+
+[data-theme="dark"] .atk-wrap .atk-send-btn {
+    color: rgba(255,255,255,.7) !important;
+    border-color: rgba(255,255,255,.15) !important;
+}
+[data-theme="dark"] .atk-wrap .atk-send-btn:hover {
+    background: rgba(73,177,245,.12) !important;
+    border-color: #49b1f5 !important;
+    color: #49b1f5 !important;
+}
+
