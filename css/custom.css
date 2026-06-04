@@ -112,97 +112,14 @@
 }
 
 /* =========================================================
-   Artalk 评论样式 - 极简透明风（参考 Twikoo 视觉）
+   Artalk 评论样式
    ========================================================= */
-
-/* 容器 */
-.artalk {
-    font-size: 16px;
-}
-
-/* ---- 日间模式 ---- */
-.artalk:not(.atk-dark-mode) {
-    --at-color-font: #4c4948;
-    --at-color-meta: #999;
-    --at-color-bg: transparent;
-    --at-color-bg-transl: transparent;
-    --at-color-bg-grey: transparent;
-    --at-color-border: rgba(0,0,0,.08);
-    --at-color-main: #49b1f5;
-    --at-radius: 8px;
-    --at-radius-input: 5px;
-}
 
 /* 昵称栏 + 文本框之间虚线 */
 .atk-header {
     padding-bottom: 10px;
     margin-bottom: 10px;
     border-bottom: 1px dashed rgba(0,0,0,.12);
-}
-
-/* 昵称/邮箱/网址输入框 */
-.atk-header input {
-    background: rgba(0,0,0,.03) !important;
-    border: 1px solid rgba(0,0,0,.1) !important;
-    border-radius: 5px !important;
-    padding: 6px 10px !important;
-    font-size: 14px !important;
-    color: #4c4948 !important;
-}
-.atk-header input:focus {
-    background: rgba(73,177,245,.04) !important;
-    border-color: #49b1f5 !important;
-    outline: none;
-}
-
-/* 文本域 */
-.atk-textarea-wrap textarea,
-.atk-textarea {
-    background: rgba(0,0,0,.03) !important;
-    border: 1px solid rgba(0,0,0,.1) !important;
-    border-radius: 5px !important;
-    padding: 10px 12px !important;
-    font-size: 15px !important;
-    color: #4c4948 !important;
-    resize: vertical;
-}
-.atk-textarea:focus {
-    background: rgba(73,177,245,.04) !important;
-    border-color: #49b1f5 !important;
-    outline: none;
-}
-
-/* 发送按钮 */
-.atk-send-btn {
-    background: transparent !important;
-    color: #4a4a4a !important;
-    border: 1px solid rgba(0,0,0,.15) !important;
-    border-radius: 5px !important;
-    padding: 5px 14px !important;
-    font-size: 14px !important;
-    transition: all .2s;
-}
-.atk-send-btn:hover {
-    background: rgba(73,177,245,.08) !important;
-    border-color: #49b1f5 !important;
-    color: #49b1f5 !important;
-}
-
-/* 评论列表 - 透明 */
-.atk-list > .atk-item,
-.atk-item,
-.atk-comment-wrap {
-    background: transparent !important;
-}
-.atk-list > .atk-item + .atk-item {
-    border-top: 1px solid rgba(0,0,0,.06);
-    padding-top: 16px;
-    margin-top: 16px;
-}
-
-/* 头像 */
-.atk-avatar img {
-    border-radius: 4px;
 }
 
 /* ---- 夜间模式 ---- */
@@ -253,8 +170,10 @@
     color: #49b1f5 !important;
 }
 
-/* 夜间评论列表 */
+/* 夜间评论列表项 */
 .artalk.atk-dark-mode .atk-list > .atk-item + .atk-item {
-    border-top-color: rgba(255,255,255,.06);
+    border-top: 1px solid rgba(255,255,255,.06);
+    padding-top: 16px;
+    margin-top: 16px;
 }
 
