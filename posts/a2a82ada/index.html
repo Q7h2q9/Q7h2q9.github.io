@@ -1,0 +1,302 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Android 逆向入门：DEX 文件格式详解 | Q7h2q9のblog</title><meta name="author" content="Q7h2q9"><meta name="copyright" content="Q7h2q9"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="从零理解 DEX 文件结构，覆盖文件头、索引区、数据区及实战解析。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Android 逆向入门：DEX 文件格式详解">
+<meta property="og:url" content="https://q7h2q9.github.io/posts/a2a82ada/index.html">
+<meta property="og:site_name" content="Q7h2q9のblog">
+<meta property="og:description" content="从零理解 DEX 文件结构，覆盖文件头、索引区、数据区及实战解析。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://q7h2q9.github.io/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg">
+<meta property="article:published_time" content="2025-05-31T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-06-03T16:00:00.000Z">
+<meta property="article:author" content="Q7h2q9">
+<meta property="article:tag" content="Android">
+<meta property="article:tag" content="DEX">
+<meta property="article:tag" content="逆向">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://q7h2q9.github.io/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Android 逆向入门：DEX 文件格式详解",
+  "url": "https://q7h2q9.github.io/posts/a2a82ada/",
+  "image": "https://q7h2q9.github.io/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg",
+  "datePublished": "2025-05-31T16:00:00.000Z",
+  "dateModified": "2026-06-03T16:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Q7h2q9",
+      "url": "https://q7h2q9.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://q7h2q9.github.io/posts/a2a82ada/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"><link rel="preconnect" href="//busuanzi.ibruce.info"><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":300,"languages":{"author":"作者: Q7h2q9","link":"链接: ","source":"来源: Q7h2q9のblog","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Android 逆向入门：DEX 文件格式详解',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/custom.css"><svg aria-hidden="true" style="position:absolute; overflow:hidden; width:0; height:0"><symbol id="icon-sun" viewbox="0 0 1024 1024"><path d="M960 512l-128 128v192h-192l-128 128-128-128H192v-192l-128-128 128-128V192h192l128-128 128 128h192v192z" fill="#FFD878" p-id="8420"/><path d="M736 512a224 224 0 1 0-448 0 224 224 0 1 0 448 0z" fill="#FFE4A9" p-id="8421"/><path d="M512 109.248L626.752 224H800v173.248L914.752 512 800 626.752V800h-173.248L512 914.752 397.248 800H224v-173.248L109.248 512 224 397.248V224h173.248L512 109.248M512 64l-128 128H192v192l-128 128 128 128v192h192l128 128 128-128h192v-192l128-128-128-128V192h-192l-128-128z" fill="#4D5152" p-id="8422"/><path d="M512 320c105.888 0 192 86.112 192 192s-86.112 192-192 192-192-86.112-192-192 86.112-192 192-192m0-32a224 224 0 1 0 0 448 224 224 0 0 0 0-448z" fill="#4D5152" p-id="8423"/></symbol><symbol id="icon-moon" viewbox="0 0 1024 1024"><path d="M611.370667 167.082667a445.013333 445.013333 0 0 1-38.4 161.834666 477.824 477.824 0 0 1-244.736 244.394667 445.141333 445.141333 0 0 1-161.109334 38.058667 85.077333 85.077333 0 0 0-65.066666 135.722666A462.08 462.08 0 1 0 747.093333 102.058667a85.077333 85.077333 0 0 0-135.722666 65.024z" fill="#FFB531" p-id="11345"/><path d="M329.728 274.133333l35.157333-35.157333a21.333333 21.333333 0 1 0-30.165333-30.165333l-35.157333 35.157333-35.114667-35.157333a21.333333 21.333333 0 0 0-30.165333 30.165333l35.114666 35.157333-35.114666 35.157334a21.333333 21.333333 0 1 0 30.165333 30.165333l35.114667-35.157333 35.157333 35.157333a21.333333 21.333333 0 1 0 30.165333-30.165333z" fill="#030835" p-id="11346"/></symbol></svg><meta name="generator" content="Hexo 8.1.1"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/img/background.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">12</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg fixed" id="page-header" style="background-image: url(/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg);"><nav id="nav"><!-- 左侧博客信息区域--><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Q7h2q9のblog</span></a><a class="nav-page-title" href="/"><span class="site-name">Android 逆向入门：DEX 文件格式详解</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><!-- 新增的导航菜单容器（居中布局关键）--><div id="nav-menus-container"><!-- 菜单主体部分--><div id="menus"><!-- 菜单项--><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><!-- 右侧功能区域（新增容器）--><div id="nav-right-container"><!-- 搜索按钮（移动到右侧）--><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><!-- 移动端汉堡菜单按钮--><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Android 逆向入门：DEX 文件格式详解</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-05-31T16:00:00.000Z" title="发表于 2025-06-01 00:00:00">2025-06-01</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-06-03T16:00:00.000Z" title="更新于 2026-06-04 00:00:00">2026-06-04</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E9%80%86%E5%90%91%E5%B7%A5%E7%A8%8B/">逆向工程</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">386</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>1分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id data-flag-title><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="什么是-DEX"><a href="#什么是-DEX" class="headerlink" title="什么是 DEX"></a>什么是 DEX</h2><p>DEX（Dalvik Executable）是 Android 平台上 Dalvik&#x2F;ART 虚拟机的可执行文件格式，可以理解为 Android 世界的 <code>.class</code> 文件。</p>
+<span id="more"></span>
+
+<h2 id="文件头（Header）"><a href="#文件头（Header）" class="headerlink" title="文件头（Header）"></a>文件头（Header）</h2><p>DEX 文件的前 112 字节是固定的 header，包含以下关键字段：</p>
+<table>
+<thead>
+<tr>
+<th>偏移</th>
+<th>大小</th>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0x00</td>
+<td>8</td>
+<td>magic</td>
+<td><code>dex\n035\0</code> 或 <code>dex\n039\0</code></td>
+</tr>
+<tr>
+<td>0x08</td>
+<td>4</td>
+<td>checksum</td>
+<td>Adler-32 校验和</td>
+</tr>
+<tr>
+<td>0x0C</td>
+<td>20</td>
+<td>signature</td>
+<td>SHA-1 哈希</td>
+</tr>
+<tr>
+<td>0x20</td>
+<td>4</td>
+<td>file_size</td>
+<td>文件总大小</td>
+</tr>
+<tr>
+<td>0x24</td>
+<td>4</td>
+<td>header_size</td>
+<td>头部大小，固定 0x70</td>
+</tr>
+</tbody></table>
+<h2 id="索引区"><a href="#索引区" class="headerlink" title="索引区"></a>索引区</h2><p>索引区紧跟在 header 之后，由多个 <code>_ids</code> 数组组成。</p>
+<h3 id="string-ids"><a href="#string-ids" class="headerlink" title="string_ids"></a>string_ids</h3><p>存储所有字符串的偏移量列表，每条 4 字节，指向数据区中 <code>string_data_item</code> 的位置。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">string_ids[0] -&gt; offset -&gt; &quot;Ljava/lang/Object;&quot;</span><br><span class="line">string_ids[1] -&gt; offset -&gt; &quot;Ljava/lang/String;&quot;</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h3 id="type-ids"><a href="#type-ids" class="headerlink" title="type_ids"></a>type_ids</h3><p>引用 <code>string_ids</code> 的下标，表示类型描述符。</p>
+<h3 id="proto-ids"><a href="#proto-ids" class="headerlink" title="proto_ids"></a>proto_ids</h3><p>方法原型，包含返回类型和参数列表，用于构成方法签名。</p>
+<h2 id="数据区"><a href="#数据区" class="headerlink" title="数据区"></a>数据区</h2><h3 id="code-item"><a href="#code-item" class="headerlink" title="code_item"></a>code_item</h3><p>每个方法的字节码存储在 <code>code_item</code> 中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">registers_size  - 寄存器数量</span><br><span class="line">ins_size        - 入参占用寄存器数</span><br><span class="line">outs_size       - 调用其他方法时出参寄存器数</span><br><span class="line">insns_size      - 指令长度（以 2 字节为单位）</span><br><span class="line">insns[]         - 实际指令字节码</span><br></pre></td></tr></table></figure>
+
+<h3 id="smali-对照"><a href="#smali-对照" class="headerlink" title="smali 对照"></a>smali 对照</h3><p>以下是一段简单的 smali 和对应的 DEX 字节码：</p>
+<figure class="highlight smali"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">.method</span><span class="keyword"> public</span><span class="keyword"> constructor</span> &lt;init&gt;()V</span><br><span class="line"><span class="keyword">    .registers</span> 1</span><br><span class="line">   <span class="built_in"> invoke-direct </span>&#123;p0&#125;, <span class="class">Ljava/lang/Object;</span>-&gt;&lt;init&gt;()V</span><br><span class="line">   <span class="built_in"> return-void</span></span><br><span class="line"><span class="built_in"></span><span class="keyword">.end method</span></span><br></pre></td></tr></table></figure>
+
+<p>对应 DEX 指令：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">70 10 xx xx 00 00   # invoke-direct</span><br><span class="line">0E 00               # return-void</span><br></pre></td></tr></table></figure>
+
+<h2 id="010-Editor-解析"><a href="#010-Editor-解析" class="headerlink" title="010 Editor 解析"></a>010 Editor 解析</h2><p>使用 <a target="_blank" rel="external nofollow noopener noreferrer" href="https://www.sweetscape.com/010editor/">010 Editor</a> 配合 DEX 模板可以可视化所有字段，推荐直接从 SweetScape 官方模板库安装 <code>DEX.bt</code>。</p>
+</article><div class="post-changelog"><div class="post-changelog__title"><i class="fas fa-code-branch fa-fw"></i><span> 更新日志</span></div><div class="post-changelog__timeline"><div class="post-changelog__item"><div class="post-changelog__dot"></div><div class="post-changelog__content"><span class="post-changelog__date">2025-06-01</span><span class="post-changelog__msg">初稿，覆盖文件头 header 结构</span></div></div><div class="post-changelog__item"><div class="post-changelog__dot"></div><div class="post-changelog__content"><span class="post-changelog__date">2025-09-14</span><span class="post-changelog__msg">补充 string_ids / type_ids / proto_ids 索引区</span></div></div><div class="post-changelog__item"><div class="post-changelog__dot"></div><div class="post-changelog__content"><span class="post-changelog__date">2026-01-20</span><span class="post-changelog__msg">新增 method_ids 和 code_item 数据区解析</span></div></div><div class="post-changelog__item"><div class="post-changelog__dot"></div><div class="post-changelog__content"><span class="post-changelog__date">2026-06-04</span><span class="post-changelog__msg">增加 smali 对照示例和 010 Editor 模板</span></div></div></div></div><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io">Q7h2q9</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io/posts/a2a82ada/">https://q7h2q9.github.io/posts/a2a82ada/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="external nofollow noopener noreferrer">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://q7h2q9.github.io" target="_blank">Q7h2q9のblog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E9%80%86%E5%90%91/">逆向</a><a class="post-meta__tags" href="/tags/Android/">Android</a><a class="post-meta__tags" href="/tags/DEX/">DEX</a></div><div class="post-share"><div class="social-share" data-image="/img/dex(Dalvik%20%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6)%20%E7%BB%93%E6%9E%84%E5%AD%A6%E4%B9%A0.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/posts/1243066710/" title="demo"><img class="cover" src="/img/demo.jpg" onerror="onerror=null;src='/img/post-404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">demo</div></div><div class="info-2"><div class="info-item-1">Welcome to Hexo! This is your very first post. Check documentation for more info. If you get any problems when using Hexo, you can find the answer in troubleshooting or you can ask me on GitHub. Quick StartCreate a new post1$ hexo new &quot;My New Post&quot;  More info: Writing Run server1$ hexo server  More info: Server Generate static files1$ hexo generate  More info: Generating Deploy to remote sites1$ hexo deploy  More info: Deployment </div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/posts/48b41aa4/" title="2026 tx游戏安全技术竞赛初赛 (安卓)"><img class="cover" src="/img/2026%E8%85%BE%E8%AE%AF%E6%B8%B8%E6%88%8F%E5%AE%89%E5%85%A8%E6%8A%80%E6%9C%AF%E7%AB%9E%E8%B5%9B%E5%88%9D%E8%B5%9B-%E5%AE%89%E5%8D%93.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-14</div><div class="info-item-2">2026 tx游戏安全技术竞赛初赛 (安卓)</div></div><div class="info-2"><div class="info-item-1">.1.......1.</div></div></div></a></div></div><hr class="custom-hr"><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="giscus-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="author-info-name">Q7h2q9</div><div class="author-info-description">什么树开什么花，</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">12</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="external nofollow noopener noreferrer" href="https://github.com/Q7h2q9"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Q7h2q9" target="_blank" title="Github" rel="external nofollow noopener noreferrer"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="https://space.bilibili.com/434684032" target="_blank" title="Bilibili" rel="external nofollow noopener noreferrer"><i class="fab fa-bilibili" style="color: #fb7299;"></i></a><a class="social-icon" href="mailto:2925869228@qq.com" target="_blank" title="Email" rel="external nofollow noopener noreferrer"><i class="fas fa-envelope" style="color: #12B7F5;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">起势，收势</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF-DEX"><span class="toc-number">1.</span> <span class="toc-text">什么是 DEX</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E5%A4%B4%EF%BC%88Header%EF%BC%89"><span class="toc-number">2.</span> <span class="toc-text">文件头（Header）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E5%8C%BA"><span class="toc-number">3.</span> <span class="toc-text">索引区</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#string-ids"><span class="toc-number">3.1.</span> <span class="toc-text">string_ids</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#type-ids"><span class="toc-number">3.2.</span> <span class="toc-text">type_ids</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#proto-ids"><span class="toc-number">3.3.</span> <span class="toc-text">proto_ids</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%8C%BA"><span class="toc-number">4.</span> <span class="toc-text">数据区</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#code-item"><span class="toc-number">4.1.</span> <span class="toc-text">code_item</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#smali-%E5%AF%B9%E7%85%A7"><span class="toc-number">4.2.</span> <span class="toc-text">smali 对照</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#010-Editor-%E8%A7%A3%E6%9E%90"><span class="toc-number">5.</span> <span class="toc-text">010 Editor 解析</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/posts/bc06abd6/" title="5.28 Summary (2)"><img src="/img/summary-2-2026-05-28.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="5.28 Summary (2)"></a><div class="content"><a class="title" href="/posts/bc06abd6/" title="5.28 Summary (2)">5.28 Summary (2)</a><time datetime="2026-05-27T16:00:00.000Z" title="发表于 2026-05-28 00:00:00">2026-05-28</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/6dcdf4a5/" title="5.26 Summary (1)"><img src="/img/summary-1-2026-05-26.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="5.26 Summary (1)"></a><div class="content"><a class="title" href="/posts/6dcdf4a5/" title="5.26 Summary (1)">5.26 Summary (1)</a><time datetime="2026-05-25T16:00:00.000Z" title="发表于 2026-05-26 00:00:00">2026-05-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/48b41aa4/" title="2026 tx游戏安全技术竞赛初赛 (安卓)"><img src="/img/2026%E8%85%BE%E8%AE%AF%E6%B8%B8%E6%88%8F%E5%AE%89%E5%85%A8%E6%8A%80%E6%9C%AF%E7%AB%9E%E8%B5%9B%E5%88%9D%E8%B5%9B-%E5%AE%89%E5%8D%93.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="2026 tx游戏安全技术竞赛初赛 (安卓)"></a><div class="content"><a class="title" href="/posts/48b41aa4/" title="2026 tx游戏安全技术竞赛初赛 (安卓)">2026 tx游戏安全技术竞赛初赛 (安卓)</a><time datetime="2026-04-14T12:00:00.000Z" title="发表于 2026-04-14 20:00:00">2026-04-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/7df617b6/" title="某运动app登录接口逆向分析"><img src="/img/%E6%9F%90%E8%BF%90%E5%8A%A8app%E7%99%BB%E5%BD%95%E6%8E%A5%E5%8F%A3%E9%80%86%E5%90%91%E5%88%86%E6%9E%90.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="某运动app登录接口逆向分析"></a><div class="content"><a class="title" href="/posts/7df617b6/" title="某运动app登录接口逆向分析">某运动app登录接口逆向分析</a><time datetime="2026-04-08T11:34:58.000Z" title="发表于 2026-04-08 19:34:58">2026-04-08</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/c44f96bf/" title="思源接入AI(本地／远程)"><img src="/img/%E6%80%9D%E6%BA%90%E6%8E%A5%E5%85%A5AI(cursor+mcp).png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="思源接入AI(本地／远程)"></a><div class="content"><a class="title" href="/posts/c44f96bf/" title="思源接入AI(本地／远程)">思源接入AI(本地／远程)</a><time datetime="2026-03-05T08:08:09.000Z" title="发表于 2026-03-05 16:08:09">2026-03-05</time></div></div></div></div></div></div></main><footer id="footer" style="background-color: rgba(45, 10, 61, 0.2);"><div class="footer-other"><div class="footer-copyright"></div><div class="footer_custom_text"><div>2025 Q7h2q9 - 所有权利保留</div>
+<div>> stay subside <</div>
+<div>访问量:<span id="busuanzi_value_site_pv"></span> | 你是第<span id="busuanzi_value_site_uv"></span>位今日访客</div>
+</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><a class="icon-V" href="javascript:void(0);" onclick="switchNightMode()" title="日间和夜间模式切换"><svg width="25" height="25" viewbox="0 0 1024 1024"><use id="modeicon" xlink:href="#icon-moon"/></svg></a><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = {"data-category":"Announcements","data-mapping":"pathname","data-strict":0,"data-reactions-enabled":1,"data-emit-metadata":0,"data-input-position":"bottom","data-lang":"zh-CN"}
+
+  const getGiscusTheme = theme => theme === 'dark' ? 'dark' : 'light'
+
+  const createScriptElement = config => {
+    const ele = document.createElement('script')
+    Object.entries(config).forEach(([key, value]) => {
+      ele.setAttribute(key, value)
+    })
+    return ele
+  }
+
+  const loadGiscus = (el = document, key) => {
+    const mappingConfig = isShuoshuo
+      ? { 'data-mapping': 'specific', 'data-term': key }
+      : { 'data-mapping': (option && option['data-mapping']) || 'pathname' }
+
+    const giscusConfig = {
+      src: 'https://giscus.app/client.js',
+      'data-repo': 'Q7h2q9/Q7h2q9.github.io',
+      'data-repo-id': 'R_kgDOQrfy5A',
+      'data-category-id': 'DIC_kwDOQrfy5M4C0O_x',
+      'data-theme': getGiscusTheme(document.documentElement.getAttribute('data-theme')),
+      'data-reactions-enabled': '1',
+      crossorigin: 'anonymous',
+      async: true,
+      ...option,
+      ...mappingConfig
+    }
+
+    const scriptElement = createScriptElement(giscusConfig)
+
+    el.querySelector('#giscus-wrap').appendChild(scriptElement)
+
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyGiscus = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+  }
+
+  const changeGiscusTheme = theme => {
+    const iframe = document.querySelector('#giscus-wrap iframe')
+    if (iframe) {
+      const message = {
+        giscus: {
+          setConfig: {
+            theme: getGiscusTheme(theme)
+          }
+        }
+      }
+      iframe.contentWindow.postMessage(message, 'https://giscus.app')
+    }
+  }
+
+  btf.addGlobalFn('themeChange', changeGiscusTheme, 'giscus')
+
+  if (isShuoshuo) {
+    'Giscus' === 'Giscus'
+      ? window.shuoshuoComment = { loadComment: loadGiscus }
+      : window.loadOtherComment = loadGiscus
+    return
+  }
+
+  if ('Giscus' === 'Giscus' || !false) {
+    if (false) btf.loadComment(document.getElementById('giscus-wrap'), loadGiscus)
+    else loadGiscus()
+  } else {
+    window.loadOtherComment = loadGiscus
+  }
+})()</script></div><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><script src="/js/sun_moon.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="输入关键词…" type="text"></div><hr><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.3"></script></div></div></body></html>

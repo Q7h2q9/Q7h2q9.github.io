@@ -263,6 +263,35 @@
     </entry>
     
     
+    
+    <entry>
+      <title>Android 逆向入门：DEX 文件格式详解</title>
+      <link href="/posts/a2a82ada/"/>
+      <url>/posts/a2a82ada/</url>
+      
+        <content type="html"><![CDATA[<h2 id="什么是-DEX"><a href="#什么是-DEX" class="headerlink" title="什么是 DEX"></a>什么是 DEX</h2><p>DEX（Dalvik Executable）是 Android 平台上 Dalvik&#x2F;ART 虚拟机的可执行文件格式，可以理解为 Android 世界的 <code>.class</code> 文件。</p><span id="more"></span><h2 id="文件头（Header）"><a href="#文件头（Header）" class="headerlink" title="文件头（Header）"></a>文件头（Header）</h2><p>DEX 文件的前 112 字节是固定的 header，包含以下关键字段：</p><table><thead><tr><th>偏移</th><th>大小</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0x00</td><td>8</td><td>magic</td><td><code>dex\n035\0</code> 或 <code>dex\n039\0</code></td></tr><tr><td>0x08</td><td>4</td><td>checksum</td><td>Adler-32 校验和</td></tr><tr><td>0x0C</td><td>20</td><td>signature</td><td>SHA-1 哈希</td></tr><tr><td>0x20</td><td>4</td><td>file_size</td><td>文件总大小</td></tr><tr><td>0x24</td><td>4</td><td>header_size</td><td>头部大小，固定 0x70</td></tr></tbody></table><h2 id="索引区"><a href="#索引区" class="headerlink" title="索引区"></a>索引区</h2><p>索引区紧跟在 header 之后，由多个 <code>_ids</code> 数组组成。</p><h3 id="string-ids"><a href="#string-ids" class="headerlink" title="string_ids"></a>string_ids</h3><p>存储所有字符串的偏移量列表，每条 4 字节，指向数据区中 <code>string_data_item</code> 的位置。</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">string_ids[0] -&gt; offset -&gt; &quot;Ljava/lang/Object;&quot;</span><br><span class="line">string_ids[1] -&gt; offset -&gt; &quot;Ljava/lang/String;&quot;</span><br><span class="line">...</span><br></pre></td></tr></table></figure><h3 id="type-ids"><a href="#type-ids" class="headerlink" title="type_ids"></a>type_ids</h3><p>引用 <code>string_ids</code> 的下标，表示类型描述符。</p><h3 id="proto-ids"><a href="#proto-ids" class="headerlink" title="proto_ids"></a>proto_ids</h3><p>方法原型，包含返回类型和参数列表，用于构成方法签名。</p><h2 id="数据区"><a href="#数据区" class="headerlink" title="数据区"></a>数据区</h2><h3 id="code-item"><a href="#code-item" class="headerlink" title="code_item"></a>code_item</h3><p>每个方法的字节码存储在 <code>code_item</code> 中：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">registers_size  - 寄存器数量</span><br><span class="line">ins_size        - 入参占用寄存器数</span><br><span class="line">outs_size       - 调用其他方法时出参寄存器数</span><br><span class="line">insns_size      - 指令长度（以 2 字节为单位）</span><br><span class="line">insns[]         - 实际指令字节码</span><br></pre></td></tr></table></figure><h3 id="smali-对照"><a href="#smali-对照" class="headerlink" title="smali 对照"></a>smali 对照</h3><p>以下是一段简单的 smali 和对应的 DEX 字节码：</p><figure class="highlight smali"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">.method</span><span class="keyword"> public</span><span class="keyword"> constructor</span> &lt;init&gt;()V</span><br><span class="line"><span class="keyword">    .registers</span> 1</span><br><span class="line">   <span class="built_in"> invoke-direct </span>&#123;p0&#125;, <span class="class">Ljava/lang/Object;</span>-&gt;&lt;init&gt;()V</span><br><span class="line">   <span class="built_in"> return-void</span></span><br><span class="line"><span class="built_in"></span><span class="keyword">.end method</span></span><br></pre></td></tr></table></figure><p>对应 DEX 指令：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">70 10 xx xx 00 00   # invoke-direct</span><br><span class="line">0E 00               # return-void</span><br></pre></td></tr></table></figure><h2 id="010-Editor-解析"><a href="#010-Editor-解析" class="headerlink" title="010 Editor 解析"></a>010 Editor 解析</h2><p>使用 <a href="https://www.sweetscape.com/010editor/">010 Editor</a> 配合 DEX 模板可以可视化所有字段，推荐直接从 SweetScape 官方模板库安装 <code>DEX.bt</code>。</p>]]></content>
+      
+      
+      <categories>
+          
+          <category> 逆向工程 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 逆向 </tag>
+            
+            <tag> Android </tag>
+            
+            <tag> DEX </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
   
   
 </search>
