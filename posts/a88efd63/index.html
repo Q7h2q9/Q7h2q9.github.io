@@ -1,0 +1,327 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>linux学习(一) | Q7h2q9のblog</title><meta name="author" content="Q7h2q9"><meta name="copyright" content="Q7h2q9"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="六月开始做 EDR 开发实训，写到 ring3 网络采集器的时候卡住了。 需求听起来很简单：知道机器上每条 TCP 连接属于哪个进程。 就是做个 pid-to-connection 的映射。 但如果不能用 eBPF，也不能插内核模块，纯靠用户态能做吗？ 能。内核在 &#x2F;proc 里已经把答案摊在桌面上了，只不过需要用 inode 做桥梁，把两张表 JOIN 起来。   这篇文章是我在补这条「归因链路">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux学习(一)">
+<meta property="og:url" content="https://q7h2q9.github.io/posts/a88efd63/index.html">
+<meta property="og:site_name" content="Q7h2q9のblog">
+<meta property="og:description" content="六月开始做 EDR 开发实训，写到 ring3 网络采集器的时候卡住了。 需求听起来很简单：知道机器上每条 TCP 连接属于哪个进程。 就是做个 pid-to-connection 的映射。 但如果不能用 eBPF，也不能插内核模块，纯靠用户态能做吗？ 能。内核在 &#x2F;proc 里已经把答案摊在桌面上了，只不过需要用 inode 做桥梁，把两张表 JOIN 起来。   这篇文章是我在补这条「归因链路">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://q7h2q9.github.io/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png">
+<meta property="article:published_time" content="2026-06-05T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-06-05T17:23:05.430Z">
+<meta property="article:author" content="Q7h2q9">
+<meta property="article:tag" content="EDR">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="文件系统">
+<meta property="article:tag" content="权限模型">
+<meta property="article:tag" content="网络">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://q7h2q9.github.io/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "linux学习(一)",
+  "url": "https://q7h2q9.github.io/posts/a88efd63/",
+  "image": "https://q7h2q9.github.io/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png",
+  "datePublished": "2026-06-05T16:00:00.000Z",
+  "dateModified": "2026-06-05T17:23:05.430Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Q7h2q9",
+      "url": "https://q7h2q9.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://q7h2q9.github.io/posts/a88efd63/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"><link rel="preconnect" href="//busuanzi.ibruce.info"><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":true,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":300,"languages":{"author":"作者: Q7h2q9","link":"链接: ","source":"来源: Q7h2q9のblog","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux学习(一)',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/custom.css"><svg aria-hidden="true" style="position:absolute; overflow:hidden; width:0; height:0"><symbol id="icon-sun" viewbox="0 0 1024 1024"><path d="M960 512l-128 128v192h-192l-128 128-128-128H192v-192l-128-128 128-128V192h192l128-128 128 128h192v192z" fill="#FFD878" p-id="8420"/><path d="M736 512a224 224 0 1 0-448 0 224 224 0 1 0 448 0z" fill="#FFE4A9" p-id="8421"/><path d="M512 109.248L626.752 224H800v173.248L914.752 512 800 626.752V800h-173.248L512 914.752 397.248 800H224v-173.248L109.248 512 224 397.248V224h173.248L512 109.248M512 64l-128 128H192v192l-128 128 128 128v192h192l128 128 128-128h192v-192l128-128-128-128V192h-192l-128-128z" fill="#4D5152" p-id="8422"/><path d="M512 320c105.888 0 192 86.112 192 192s-86.112 192-192 192-192-86.112-192-192 86.112-192 192-192m0-32a224 224 0 1 0 0 448 224 224 0 0 0 0-448z" fill="#4D5152" p-id="8423"/></symbol><symbol id="icon-moon" viewbox="0 0 1024 1024"><path d="M611.370667 167.082667a445.013333 445.013333 0 0 1-38.4 161.834666 477.824 477.824 0 0 1-244.736 244.394667 445.141333 445.141333 0 0 1-161.109334 38.058667 85.077333 85.077333 0 0 0-65.066666 135.722666A462.08 462.08 0 1 0 747.093333 102.058667a85.077333 85.077333 0 0 0-135.722666 65.024z" fill="#FFB531" p-id="11345"/><path d="M329.728 274.133333l35.157333-35.157333a21.333333 21.333333 0 1 0-30.165333-30.165333l-35.157333 35.157333-35.114667-35.157333a21.333333 21.333333 0 0 0-30.165333 30.165333l35.114666 35.157333-35.114666 35.157334a21.333333 21.333333 0 1 0 30.165333 30.165333l35.114667-35.157333 35.157333 35.157333a21.333333 21.333333 0 1 0 30.165333-30.165333z" fill="#030835" p-id="11346"/></symbol></svg><meta name="generator" content="Hexo 8.1.1"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/img/background.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">17</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg fixed" id="page-header" style="background-image: url(/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png);"><nav id="nav"><!-- 左侧博客信息区域--><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Q7h2q9のblog</span></a><a class="nav-page-title" href="/"><span class="site-name">linux学习(一)</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><!-- 新增的导航菜单容器（居中布局关键）--><div id="nav-menus-container"><!-- 菜单主体部分--><div id="menus"><!-- 菜单项--><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/comments/"><i class="fa-fw fas fa-comments"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-user"></i><span> 关于</span></a></div></div></div></div><!-- 右侧功能区域（新增容器）--><div id="nav-right-container"><!-- 搜索按钮（移动到右侧）--><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><!-- 移动端汉堡菜单按钮--><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">linux学习(一)</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-06-05T16:00:00.000Z" title="发表于 2026-06-06 00:00:00">2026-06-06</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-06-05T17:23:05.430Z" title="更新于 2026-06-06 01:23:05">2026-06-06</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Linux/">Linux</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id data-flag-title><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>六月开始做 EDR 开发实训，写到 ring3 网络采集器的时候卡住了。</p>
+<p>需求听起来很简单：<strong>知道机器上每条 TCP 连接属于哪个进程。</strong> 就是做个 pid-to-connection 的映射。</p>
+<p>但如果不能用 eBPF，也不能插内核模块，纯靠用户态能做吗？</p>
+<div class="note success flat"><p>能。内核在 <code>/proc</code> 里已经把答案摊在桌面上了，只不过需要用 inode 做桥梁，把两张表 JOIN 起来。</p>
+</div>
+
+<p>这篇文章是我在补这条「归因链路」时积累的知识。不是字典式的 Linux 教程——是从一个问题出发，把 inode → socket → &#x2F;proc → fd → 权限模型这一整条线串起来。</p>
+<hr>
+<h2 id="起点：-proc-net-tcp"><a href="#起点：-proc-net-tcp" class="headerlink" title="起点：&#x2F;proc&#x2F;net&#x2F;tcp"></a>起点：&#x2F;proc&#x2F;net&#x2F;tcp</h2><p>第一步，得先知道机器上现在有哪些 TCP 连接。</p>
+<p>Linux 内核的 TCP 协议栈在 <code>/proc/net/tcp</code> 暴露了一个只读接口。每次 <code>cat</code> 它，内核会实时遍历所有活动 socket，把状态拍出来：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sl  local_address rem_address   st tx_queue rx_queue  uid  timeout inode</span><br><span class="line"> 0: 0100007F:AA03 00000000:0000 0A 00000000:00000000 1000        0 30141</span><br><span class="line"> 5: 8B80A8C0:0016 0180A8C0:FCE6 01 00000054:00000000    0        0 654952</span><br></pre></td></tr></table></figure>
+
+<p>第一眼看是乱码——IP 地址是十六进制还是反的。<code>8B80A8C0</code> 按字节倒序 → <code>C0.A8.80.8B</code> → <code>192.168.128.139</code>。<mark class="hl-label red">小端序</mark>。端口 <code>0016</code> 转十进制 → <code>22</code>（SSH）。</p>
+<div class="note info flat"><p>解码公式：<code>/proc/net/tcp</code> 里的 IP 和端口都是小端十六进制。本地地址 &#x3D; IP:PORT 倒序解码即可。</p>
+</div>
+
+<p>字段里最关键的是最后一列——<strong><code>inode</code></strong>。同一个数字 <code>654952</code> 会同时出现在 <code>/proc/net/tcp</code> 和 <code>/proc/&lt;pid&gt;/fd</code> 里。它就是连接和进程之间的桥梁。</p>
+<hr>
+<h2 id="为什么是-inode？"><a href="#为什么是-inode？" class="headerlink" title="为什么是 inode？"></a>为什么是 inode？</h2><p>inode（索引节点）是文件系统里每个文件、目录、设备的底层身份标识。它不存文件名——文件名存在父目录的数据块里（”文件名 → inode号” 映射表）。inode 自己存的是元数据：权限位、时间戳、数据块位置。</p>
+<p>但 socket 不是文件——它是内核内存里的缓冲区 + 协议栈，不落磁盘。那它哪来的 inode？</p>
+<p>内核专门在内存里虚拟了一个文件系统，叫 <strong>sockfs（Socket File System）</strong>。每次创建 socket，sockfs 为它分配一个 inode 号。内核结构长这样：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">socket_alloc</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">inode</span>  <span class="title">vfs_inode</span>;</span>  <span class="comment">// VFS 层外壳：让文件系统认识它</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">socket</span> <span class="title">socket</span>;</span>     <span class="comment">// 网络协议栈本体</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>外壳是给文件系统的，内核走同一套 VFS 接口操作一切资源。内芯才是真正处理 TCP 收发的东西。</p>
+<div class="note warning flat"><p>这就是「一切皆文件」的真正含义——不是”所有东西都是磁盘文件”，而是”所有资源都挂到 VFS 上，用同一套路径解析和权限检查”。</p>
+</div>
+
+<hr>
+<h2 id="proc-fd：归因的最后一环"><a href="#proc-fd：归因的最后一环" class="headerlink" title="&#x2F;proc&#x2F;&#x2F;fd：归因的最后一环"></a>&#x2F;proc&#x2F;<pid>&#x2F;fd：归因的最后一环</pid></h2><p>有了 socket inode 号，下一步就是找它属于谁。</p>
+<p>每个进程的 <code>/proc/&lt;pid&gt;/fd</code> 目录是其文件描述符表的用户空间镜像。进去 <code>ls -l</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">sudo</span> <span class="built_in">ls</span> -l /proc/1/fd</span><br><span class="line">lrwx------ ...  0 -&gt; /dev/null</span><br><span class="line">lrwx------ ... 12 -&gt; <span class="string">&#x27;socket:[41282]&#x27;</span></span><br><span class="line">lrwx------ ... 15 -&gt; <span class="string">&#x27;socket:[34338]&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>socket:[41282]</code>——冒号后面的数字就是 socket inode 号。跟 <code>/proc/net/tcp</code> 的 inode 列一比对，匹配上了——这条连接属于这个 PID。</p>
+<div class="note success flat"><p>整个归因链就是：<code>/proc/net/tcp inode</code> ↔ <code>/proc/&lt;pid&gt;/fd</code> 符号链接 ↔ PID。两张表 JOIN，查出一个 inode，就能确定一条连接属于哪个进程。</p>
+</div>
+
+<p>内核里完整的链路更长：<code>task_struct</code>（进程 PCB）→ <code>files_struct</code>（fd 数组）→ <code>struct file</code>（每次 open&#x2F;socket 创建）→ <code>dentry &amp; inode</code>（VFS 层映射）。但在 <code>/proc</code> 层面，<code>socket:[inode]</code> 三个字已经把底层细节压缩干净了。</p>
+<hr>
+<h2 id="权限从哪来？"><a href="#权限从哪来？" class="headerlink" title="权限从哪来？"></a>权限从哪来？</h2><p>归因拿到了 PID，下一个问题是：<strong>读取其他进程的 <code>/proc/&lt;pid&gt;/fd</code> 需要什么权限？</strong></p>
+<p>答案在进程凭据里。内核用 <code>task_struct</code> 表示每个进程，其中 <code>cred</code> 子结构体记录身份：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">cred</span> &#123;</span></span><br><span class="line">    <span class="type">kuid_t</span>  uid;   <span class="comment">// Real UID：谁启动了这个进程</span></span><br><span class="line">    <span class="type">kuid_t</span> euid;   <span class="comment">// Effective UID：进程当前以谁的身份提交权限</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>ruid 和 euid 平时相等。SUID 机制会打破它——比如 <code>passwd</code> 命令要改 <code>/etc/shadow</code>（只有 root 能写），内核通过 SUID 位让进程的 euid 临时变成 <code>0</code>（root），但 ruid 保持 <code>1000</code>，记录真正触发者。</p>
+<mark class="hl-label default">关键</mark>：VFS 权限检查用的是 **euid**，不是 ruid。这个细节决定了 `/proc/<pid>/fd` 能不能被读。
+
+<hr>
+<h2 id="权限检查：匹配即停止"><a href="#权限检查：匹配即停止" class="headerlink" title="权限检查：匹配即停止"></a>权限检查：匹配即停止</h2><p>内核在做文件权限判断时走 <code>generic_permission()</code>，逻辑极简——<strong>匹配即停止</strong>：</p>
+<ol>
+<li><code>进程 euid == 文件所有者 UID</code> → 用 User 权限位判断，结束</li>
+<li>进程在文件的组内 → 用 Group 权限位判断，结束</li>
+<li>前两步都没命中 → 用 Other 权限位判断</li>
+</ol>
+<p>三层只走一层，不会叠加。文件所有者的权限覆盖一切——你是文件 owner，就算权限是 <code>---</code>（000），Group 和 Other 的权限也完全不看。</p>
+<p>inode 的 <code>i_mode</code> 字段存着所有权限位。低 9 位就是 <code>[User(rwx)] [Group(rwx)] [Other(rwx)]</code>，比如 <code>755</code> &#x3D; owner 全权 + 其他人只读执行。</p>
+<hr>
+<h2 id="目录的-r-和-x，是两条内核路径"><a href="#目录的-r-和-x，是两条内核路径" class="headerlink" title="目录的 r 和 x，是两条内核路径"></a>目录的 r 和 x，是两条内核路径</h2><p>这一部分可能是整条学习链里最颠覆直觉的——<strong>目录的 <code>r</code> 和 <code>x</code> 在内核里走的是两条完全不同的检查路径</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>权限</th>
+<th>对目录</th>
+<th>内核路径</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>r</code></td>
+<td>读取目录下的文件名列表</td>
+<td><code>getdents64()</code> → <code>MAY_READ</code></td>
+</tr>
+<tr>
+<td><code>x</code></td>
+<td>穿透目录，访问子项</td>
+<td><code>link_path_walk()</code> → <code>MAY_EXEC</code></td>
+</tr>
+</tbody></table>
+<p>一个极端场景：目录权限 <code>d--x--x--x</code>（只有 x，没有 r）。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">ls</span> /blind_dir      <span class="comment"># ❌ 失败——getdents64 需要 MAY_READ</span></span><br><span class="line">$ <span class="built_in">cat</span> /blind_dir/a.txt  <span class="comment"># ✅ 成功——link_path_walk 只需要 MAY_EXEC</span></span><br></pre></td></tr></table></figure>
+
+<p>你能用 <code>cd</code> 进去，能精确访问已知文件名的资源，但不能 <code>ls</code> 看列表。Shell 的通配符展开依赖 <code>readdir()</code>，底层用 <code>getdents64</code>——没有 <code>r</code> 权限，<code>*</code> 直接废掉。</p>
+<div class="note warning flat"><p>这种「只可穿透、不可窥探」的目录叫盲盒目录（Execute-Only Directory），典型权限 <code>711</code>。核心结论：访问它下面的文件，必须提供绝对精确的文件名。通配符、Tab 补全全部失效。</p>
+</div>
+
+<p>在多租户隔离场景里，<code>/var/www/userA/</code> 设 711，Nginx 用精确路径穿透正常服务，但被攻破的 userB 无法 <code>ls</code> 窥探其他租户。<code>getdents64</code> 和 <code>link_path_walk</code> 这条内核分叉线，是这一切的底层基础。</p>
+<hr>
+<h2 id="学到了什么"><a href="#学到了什么" class="headerlink" title="学到了什么"></a>学到了什么</h2><p>从「怎么知道一条 TCP 连接属于哪个进程」出发，倒推出来的东西远远超出了预期：</p>
+<ol>
+<li><strong><code>/proc/net/tcp</code></strong> 的每一列都有信息量，小端十六进制解码是基本功</li>
+<li><strong>inode</strong> 不是磁盘文件的专利——sockfs 让 socket 也拥有了 inode 身份</li>
+<li><strong>fd 表 + inode</strong> 是用户态归因的唯一可靠手段：两张 proc 表 JOIN</li>
+<li><strong>euid ≠ ruid</strong>，VFS 只用 euid，SUID 位靠这个机制工作</li>
+<li><strong>目录的 r 和 x 是两码事</strong>：<code>getdents64</code> vs <code>link_path_walk</code>，MAY_READ vs MAY_EXEC</li>
+<li><strong>盲盒目录</strong>把这条内核差异用到了极致——有 x 无 r，穿透但不暴露</li>
+</ol>
+<mark class="hl-label blue">这些不是"学完Linux"的知识</mark>，是写采集器时被逼着走通的那条链路。下一次更新会继续往深处挖——`/proc/<pid>/net/tcp`、netlink socket、以及怎么在 ring3 EDR 里把这些拼成能跑的采集器。
+
+<hr>
+<blockquote>
+<p>本文内容整理自个人知识库（Obsidian vault），每个概念的详细展开、代码片段和参考文献均已存入 <code>wiki/</code> 目录。本文属于「Linux 学习合集」系列第一篇，后续随实训进度持续补充。</p>
+</blockquote>
+</pid></pid></article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io">Q7h2q9</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://q7h2q9.github.io/posts/a88efd63/">https://q7h2q9.github.io/posts/a88efd63/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="external nofollow noopener noreferrer">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://q7h2q9.github.io" target="_blank">Q7h2q9のblog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Linux/">Linux</a><a class="post-meta__tags" href="/tags/EDR/">EDR</a><a class="post-meta__tags" href="/tags/%E7%BD%91%E7%BB%9C/">网络</a><a class="post-meta__tags" href="/tags/%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B/">权限模型</a><a class="post-meta__tags" href="/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a></div><div class="post-share"><div class="social-share" data-image="/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width no-desc" href="/posts/bc06abd6/" title="5.28 Summary (2)"><img class="cover" src="/img/summary-2-2026-05-28.png" onerror="onerror=null;src='/img/post-404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">5.28 Summary (2)</div></div></div></a></nav><hr class="custom-hr"><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="twikoo-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.png" onerror="this.onerror=null;this.src='/img/flink-404.jpg'" alt="avatar"></div><div class="author-info-name">Q7h2q9</div><div class="author-info-description">什么树开什么花，</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">17</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><a id="card-info-btn" target="_blank" rel="external nofollow noopener noreferrer" href="https://github.com/Q7h2q9"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Q7h2q9" target="_blank" title="Github" rel="external nofollow noopener noreferrer"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="https://space.bilibili.com/434684032" target="_blank" title="Bilibili" rel="external nofollow noopener noreferrer"><i class="fab fa-bilibili" style="color: #fb7299;"></i></a><a class="social-icon" href="mailto:2925869228@qq.com" target="_blank" title="Email" rel="external nofollow noopener noreferrer"><i class="fas fa-envelope" style="color: #12B7F5;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">起势，收势</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B5%B7%E7%82%B9%EF%BC%9A-proc-net-tcp"><span class="toc-number">1.</span> <span class="toc-text">起点：&#x2F;proc&#x2F;net&#x2F;tcp</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-inode%EF%BC%9F"><span class="toc-number">2.</span> <span class="toc-text">为什么是 inode？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#proc-fd%EF%BC%9A%E5%BD%92%E5%9B%A0%E7%9A%84%E6%9C%80%E5%90%8E%E4%B8%80%E7%8E%AF"><span class="toc-number">3.</span> <span class="toc-text">&#x2F;proc&#x2F;&#x2F;fd：归因的最后一环</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9D%83%E9%99%90%E4%BB%8E%E5%93%AA%E6%9D%A5%EF%BC%9F"><span class="toc-number">4.</span> <span class="toc-text">权限从哪来？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9D%83%E9%99%90%E6%A3%80%E6%9F%A5%EF%BC%9A%E5%8C%B9%E9%85%8D%E5%8D%B3%E5%81%9C%E6%AD%A2"><span class="toc-number">5.</span> <span class="toc-text">权限检查：匹配即停止</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%AE%E5%BD%95%E7%9A%84-r-%E5%92%8C-x%EF%BC%8C%E6%98%AF%E4%B8%A4%E6%9D%A1%E5%86%85%E6%A0%B8%E8%B7%AF%E5%BE%84"><span class="toc-number">6.</span> <span class="toc-text">目录的 r 和 x，是两条内核路径</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%A6%E5%88%B0%E4%BA%86%E4%BB%80%E4%B9%88"><span class="toc-number">7.</span> <span class="toc-text">学到了什么</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/posts/a88efd63/" title="linux学习(一)"><img src="/img/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260606012108_120_204.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="linux学习(一)"></a><div class="content"><a class="title" href="/posts/a88efd63/" title="linux学习(一)">linux学习(一)</a><time datetime="2026-06-05T16:00:00.000Z" title="发表于 2026-06-06 00:00:00">2026-06-06</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/bc06abd6/" title="5.28 Summary (2)"><img src="/img/summary-2-2026-05-28.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="5.28 Summary (2)"></a><div class="content"><a class="title" href="/posts/bc06abd6/" title="5.28 Summary (2)">5.28 Summary (2)</a><time datetime="2026-05-27T16:00:00.000Z" title="发表于 2026-05-28 00:00:00">2026-05-28</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/6dcdf4a5/" title="5.26 Summary (1)"><img src="/img/summary-1-2026-05-26.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="5.26 Summary (1)"></a><div class="content"><a class="title" href="/posts/6dcdf4a5/" title="5.26 Summary (1)">5.26 Summary (1)</a><time datetime="2026-05-25T16:00:00.000Z" title="发表于 2026-05-26 00:00:00">2026-05-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/48b41aa4/" title="2026 tx游戏安全技术竞赛初赛 (安卓)"><img src="/img/2026%E8%85%BE%E8%AE%AF%E6%B8%B8%E6%88%8F%E5%AE%89%E5%85%A8%E6%8A%80%E6%9C%AF%E7%AB%9E%E8%B5%9B%E5%88%9D%E8%B5%9B-%E5%AE%89%E5%8D%93.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="2026 tx游戏安全技术竞赛初赛 (安卓)"></a><div class="content"><a class="title" href="/posts/48b41aa4/" title="2026 tx游戏安全技术竞赛初赛 (安卓)">2026 tx游戏安全技术竞赛初赛 (安卓)</a><time datetime="2026-04-14T12:00:00.000Z" title="发表于 2026-04-14 20:00:00">2026-04-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/posts/7df617b6/" title="某运动app登录接口逆向分析"><img src="/img/%E6%9F%90%E8%BF%90%E5%8A%A8app%E7%99%BB%E5%BD%95%E6%8E%A5%E5%8F%A3%E9%80%86%E5%90%91%E5%88%86%E6%9E%90.png" onerror="this.onerror=null;this.src='/img/post-404.jpg'" alt="某运动app登录接口逆向分析"></a><div class="content"><a class="title" href="/posts/7df617b6/" title="某运动app登录接口逆向分析">某运动app登录接口逆向分析</a><time datetime="2026-04-08T11:34:58.000Z" title="发表于 2026-04-08 19:34:58">2026-04-08</time></div></div></div></div></div></div></main><footer id="footer" style="background-color: rgba(45, 10, 61, 0.2);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By Q7h2q9</span></div><div class="footer_custom_text"><div>> stay subside <</div>
+<div id="runtime"></div>
+<div>累计访问 <span id="busuanzi_value_site_pv">--</span> 次 | 累计访客 <span id="busuanzi_value_site_uv">--</span> 人</div>
+</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><a class="icon-V" href="javascript:void(0);" onclick="switchNightMode()" title="日间和夜间模式切换"><svg width="25" height="25" viewbox="0 0 1024 1024"><use id="modeicon" xlink:href="#icon-moon"/></svg></a><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = null
+
+  const getCount = () => {
+    const countELement = document.getElementById('twikoo-count')
+    if(!countELement) return
+    twikoo.getCommentsCount({
+      envId: 'https://hapi.q7h2q9.top/twikoo/',
+      region: '',
+      urls: [window.location.pathname],
+      includeReply: false
+    }).then(res => {
+      countELement.textContent = res[0].count
+    }).catch(err => {
+      console.error(err)
+    })
+  }
+
+  const init = (el = document, path = location.pathname) => {
+    twikoo.init({
+      el: el.querySelector('#twikoo-wrap'),
+      envId: 'https://hapi.q7h2q9.top/twikoo/',
+      region: '',
+      onCommentLoaded: () => {
+        btf.loadLightbox(document.querySelectorAll('#twikoo .tk-content img:not(.tk-owo-emotion)'))
+      },
+      ...option,
+      path: isShuoshuo ? path : (option && option.path) || path
+    })
+
+    
+
+    isShuoshuo && (window.shuoshuoComment.destroyTwikoo = () => {
+      if (el.children.length) {
+        el.innerHTML = ''
+        el.classList.add('no-comment')
+      }
+    })
+  }
+
+  const loadTwikoo = (el, path) => {
+    if (typeof twikoo === 'object') setTimeout(() => init(el, path), 0)
+    else btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.44/dist/twikoo.all.min.js').then(() => init(el, path))
+  }
+
+  if (isShuoshuo) {
+    'Twikoo' === 'Twikoo'
+      ? window.shuoshuoComment = { loadComment: loadTwikoo }
+      : window.loadOtherComment = loadTwikoo
+    return
+  }
+
+  if ('Twikoo' === 'Twikoo' || !false) {
+    if (false) btf.loadComment(document.getElementById('twikoo-wrap'), loadTwikoo)
+    else loadTwikoo()
+  } else {
+    window.loadOtherComment = loadTwikoo
+  }
+})()</script></div><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><script src="/js/sun_moon.js"></script><script src="/js/runtime.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="输入关键词…" type="text"></div><hr><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.3"></script></div></div></body></html>
