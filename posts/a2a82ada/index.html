@@ -232,7 +232,7 @@
     const countELement = document.getElementById('twikoo-count')
     if(!countELement) return
     twikoo.getCommentsCount({
-      envId: 'https://hapi.q7h2q9.top/twikoo',
+      envId: 'https://hapi.q7h2q9.top/twikoo/',
       region: '',
       urls: [window.location.pathname],
       includeReply: false
@@ -246,7 +246,7 @@
   const init = (el = document, path = location.pathname) => {
     twikoo.init({
       el: el.querySelector('#twikoo-wrap'),
-      envId: 'https://hapi.q7h2q9.top/twikoo',
+      envId: 'https://hapi.q7h2q9.top/twikoo/',
       region: '',
       onCommentLoaded: () => {
         btf.loadLightbox(document.querySelectorAll('#twikoo .tk-content img:not(.tk-owo-emotion)'))
